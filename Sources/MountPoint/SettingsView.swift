@@ -1,11 +1,26 @@
 import MountPointCore
 import SwiftUI
 
-private enum Page: Hashable { case server(String), activity, general }
+private enum Page: Hashable, RawRepresentable {
+    case server(String), activity
+
+    // String form so the selection survives in @SceneStorage.
+    init?(rawValue: String) {
+        if rawValue == "activity" { self = .activity }
+        else if rawValue.hasPrefix("server:") { self = .server(String(rawValue.dropFirst(7))) }
+        else { return nil }
+    }
+    var rawValue: String {
+        switch self {
+        case .server(let id): "server:\(id)"
+        case .activity: "activity"
+        }
+    }
+}
 
 struct SettingsView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var page: Page?
+    @SceneStorage("page") private var page: Page?
     @State private var editingServer: Server?
 
     var body: some View {
@@ -14,10 +29,15 @@ struct SettingsView: View {
                 Section("Servers") {
                     ForEach(model.config.servers) { server in
                         let status = model.serverRuntime(server.id)?.status
+                        // Accent-coloured system glyph like every sidebar row; status trails, like Mail's badges.
                         Label {
-                            Text(server.name.isEmpty ? server.host : server.name)
+                            HStack {
+                                Text(server.name.isEmpty ? server.host : server.name)
+                                Spacer()
+                                StatusIcon(style: serverStyle(status))
+                            }
                         } icon: {
-                            StatusIcon(style: serverStyle(status))
+                            Image(systemName: "server.rack")
                         }
                         .help(status?.label ?? "Checking…")
                         .accessibilityValue(status?.label ?? "Checking…")
@@ -26,7 +46,6 @@ struct SettingsView: View {
                 }
                 Section {
                     Label("Activity", systemImage: "list.bullet.rectangle").tag(Page.activity)
-                    Label("General", systemImage: "gearshape").tag(Page.general)
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220)
@@ -35,15 +54,23 @@ struct SettingsView: View {
             }
         } detail: {
             switch page {
-            case .server(let id): if let server = model.server(id) { ServerDetail(server: server) } else { Welcome() }
+            case .server(let id): if let server = model.server(id) { ServerDetail(server: server) } else { Welcome { editingServer = Server() } }
             case .activity: ActivityView()
-            case .general: GeneralSettings()
-            case nil: Welcome()
+            case nil: Welcome { editingServer = Server() }
             }
         }
         .sheet(item: $editingServer) { server in
             ServerForm(server: server) { saved in page = .server(saved.id) }
         }
+        .focusedSceneValue(\.newServer, $editingServer)
+        .onAppear(perform: ensureSelection)
+        .onChange(of: model.config.servers.map(\.id)) { ensureSelection() }
+    }
+
+    /// Never show a blank detail when there's something to show: fall back to the first server.
+    private func ensureSelection() {
+        if case .server(let id) = page, model.server(id) == nil { page = nil }
+        if page == nil, let first = model.config.servers.first { page = .server(first.id) }
     }
 }
 
@@ -79,11 +106,17 @@ func shareStyle(_ s: ShareStatus?) -> StatusStyle {
     }
 }
 
+/// Only reachable with no servers configured (otherwise the first server is selected).
 private struct Welcome: View {
+    let addServer: () -> Void
     var body: some View {
-        ContentUnavailableView("Mount Point",
-                               systemImage: "externaldrive.connected.to.line.below",
-                               description: Text("Add a server with the + button to start mounting shares automatically."))
+        ContentUnavailableView {
+            Label("No Servers", systemImage: "externaldrive.connected.to.line.below")
+        } description: {
+            Text("Add a server and Mount Point will keep its shares mounted.")
+        } actions: {
+            Button("Add Server…", action: addServer)
+        }
     }
 }
 
@@ -146,6 +179,8 @@ private struct ServerDetail: View {
             Button { editing = true } label: { Label("Edit Server", systemImage: "pencil") }
             Button(role: .destructive) { confirmDelete = true } label: { Label("Delete Server", systemImage: "trash") }
         }
+        .focusedSceneValue(\.editServer, $editing)
+        .focusedSceneValue(\.deleteServer, $confirmDelete)
         .sheet(isPresented: $editing) { ServerForm(server: server) { _ in } }
         .sheet(item: $editingShare) { ShareForm(share: $0) }
         .confirmationDialog("Delete \(server.name) and its shares?", isPresented: $confirmDelete) {
@@ -356,7 +391,7 @@ private struct ActivityView: View {
     }
 }
 
-private struct GeneralSettings: View {
+struct GeneralSettings: View {
     @EnvironmentObject private var model: AppModel
 
     private func binding<T>(_ key: WritableKeyPath<AppSettings, T>) -> Binding<T> {
@@ -380,6 +415,7 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("General")
+        .frame(width: 460)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
