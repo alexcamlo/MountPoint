@@ -3,7 +3,9 @@
 # Signs with $SIGN_IDENTITY (default "Win Dev Codesign") so macOS permissions survive rebuilds; ad-hoc if absent (CI).
 set -eu
 cd "$(dirname "$0")"
-swift build -c release
+# SwiftPM stamps the deployment target as the SDK version, which runs the app in macOS 15
+# compatibility mode (no Liquid Glass sidebar/toolbar). Stamp the real SDK instead.
+swift build -c release -Xlinker -platform_version -Xlinker macos -Xlinker 15.0 -Xlinker "$(xcrun --show-sdk-version)"
 APP="build/Mount Point.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
