@@ -33,8 +33,9 @@ Requires macOS 15+ and Xcode (or the Command Line Tools with Swift 6) to build.
 - **Local Network** is required to probe servers. If it's denied, rules show
   "Blocked by macOS Local Network permission". Enable it in System Settings → Privacy & Security → Local Network.
 - **Location** is requested only when a server uses the Wi-Fi rule (macOS hides the SSID otherwise).
-- `build-app.sh` signs with the local self-signed identity "Win Dev Codesign" (override with `SIGN_IDENTITY`), so
-  permissions survive rebuilds. Without it, it signs ad-hoc and macOS asks again after every rebuild.
+- `build-app.sh` signs with an "Apple Development" certificate (free with any Apple ID in Xcode → Settings →
+  Accounts; override with `SIGN_IDENTITY`). Its Team ID keeps permissions across rebuilds. Without one it signs
+  ad-hoc, and macOS asks for Local Network again after every rebuild.
 
 ## Releases
 
