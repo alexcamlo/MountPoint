@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key><string>MountPoint</string>
+	<key>CFBundleIdentifier</key><string>local.mountpoint.app</string>
+	<key>CFBundleName</key><string>Mount Point</string>
+	<key>CFBundleDisplayName</key><string>Mount Point</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>2.0.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>LSMinimumSystemVersion</key><string>15.0</string>
+	<key>LSUIElement</key><true/>
+	<key>NSLocationUsageDescription</key><string>Mount Point reads the current Wi-Fi network name to evaluate Wi-Fi rules. No location data is stored.</string>
+	<key>NSLocationWhenInUseUsageDescription</key><string>Mount Point reads the current Wi-Fi network name to evaluate Wi-Fi rules. No location data is stored.</string>
+	<key>NSLocalNetworkUsageDescription</key><string>Mount Point checks whether your servers are reachable before mounting their shares.</string>
+</dict>
+</plist>
