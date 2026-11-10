@@ -13,17 +13,20 @@ struct SettingsView: View {
             List(selection: $page) {
                 Section("Servers") {
                     ForEach(model.config.servers) { server in
+                        let status = model.serverRuntime(server.id)?.status
                         Label {
                             Text(server.name.isEmpty ? server.host : server.name)
                         } icon: {
-                            StatusDot(color: serverColor(model.serverRuntime(server.id)?.status))
+                            StatusIcon(style: serverStyle(status))
                         }
+                        .help(status?.label ?? "Checking…")
+                        .accessibilityValue(status?.label ?? "Checking…")
                         .tag(Page.server(server.id))
                     }
                 }
                 Section {
                     Label("Activity", systemImage: "list.bullet.rectangle").tag(Page.activity)
-                    Label("Settings", systemImage: "gearshape").tag(Page.general)
+                    Label("General", systemImage: "gearshape").tag(Page.general)
                 }
             }
             .navigationSplitViewColumnWidth(min: 200, ideal: 220)
@@ -44,27 +47,35 @@ struct SettingsView: View {
     }
 }
 
-struct StatusDot: View {
-    var color: Color
-    var body: some View { Circle().fill(color).frame(width: 8, height: 8).accessibilityHidden(true) }
-}
+typealias StatusStyle = (symbol: String, color: Color)
 
-func serverColor(_ s: ServerStatus?) -> Color {
-    switch s {
-    case .mounted: .green
-    case .mounting, .ruleBlocked, .reachable: .orange
-    case .error, .unavailable: .red
-    case .serviceAvailable: .blue
-    default: .secondary
+/// Shape and colour both encode status, so it still reads without colour.
+struct StatusIcon: View {
+    var style: StatusStyle
+    var body: some View {
+        Image(systemName: style.symbol).foregroundStyle(style.color).imageScale(.small).accessibilityHidden(true)
     }
 }
 
-func shareColor(_ s: ShareStatus?) -> Color {
+func serverStyle(_ s: ServerStatus?) -> StatusStyle {
     switch s {
-    case .mounted: .green
-    case .pending, .blocked: .orange
-    case .failed: .red
-    default: .secondary
+    case .mounted: ("checkmark.circle.fill", .green)
+    case .mounting: ("ellipsis.circle.fill", .orange)
+    case .ruleBlocked: ("minus.circle.fill", .orange)
+    case .reachable: ("exclamationmark.circle.fill", .orange)
+    case .error, .unavailable: ("xmark.circle.fill", .red)
+    case .serviceAvailable: ("circle.fill", .blue)
+    case .unknown, nil: ("circle.dashed", .secondary)
+    }
+}
+
+func shareStyle(_ s: ShareStatus?) -> StatusStyle {
+    switch s {
+    case .mounted: ("checkmark.circle.fill", .green)
+    case .pending: ("ellipsis.circle.fill", .orange)
+    case .blocked: ("minus.circle.fill", .orange)
+    case .failed: ("xmark.circle.fill", .red)
+    case .notMounted, .manualOnly, nil: ("circle", .secondary)
     }
 }
 
@@ -92,7 +103,7 @@ private struct ServerDetail: View {
                 LabeledContent("Address", value: "\(server.proto.rawValue)://\(server.host):\(server.port)")
                 LabeledContent("Status") {
                     HStack(spacing: 6) {
-                        StatusDot(color: serverColor(sr?.status))
+                        StatusIcon(style: serverStyle(sr?.status))
                         Text(sr?.status.label ?? "Checking…")
                         if let ms = sr?.latencyMs { Text("\(ms) ms").foregroundStyle(.secondary) }
                     }
@@ -102,7 +113,7 @@ private struct ServerDetail: View {
                 }
             }
 
-            Section("Rules") {
+            Section("Auto-mount only when") {
                 if let rules = sr?.rules {
                     ForEach(rules) { rule in
                         LabeledContent {
@@ -171,7 +182,7 @@ private struct ShareRow: View {
         let rt = model.shareRuntime(share)
         let status = rt?.status ?? .notMounted
         HStack {
-            StatusDot(color: shareColor(status))
+            StatusIcon(style: shareStyle(status))
             VStack(alignment: .leading, spacing: 2) {
                 Text(share.displayName)
                 Text(rt?.mountPoint ?? rt?.reason ?? status.label)
@@ -181,8 +192,10 @@ private struct ShareRow: View {
             if status == .mounted {
                 Button("Reveal") { model.reveal(share) }
                 Button("Unmount") { model.manualUnmount(share) }
+            } else if status == .pending {
+                ProgressView().controlSize(.small).accessibilityLabel("Mounting \(share.displayName)")
             } else {
-                Button("Mount") { model.manualMount(share) }.disabled(status == .pending)
+                Button("Mount") { model.manualMount(share) }
             }
             Menu {
                 Button("Edit…", action: onEdit)
@@ -208,6 +221,7 @@ private struct ServerForm: View {
     @State private var removePassword = false
     @State private var ssids = ""
     @State private var test: String?
+    @State private var testing = false
 
     init(server: Server, onSave: @escaping (Server) -> Void) {
         _server = State(initialValue: server)
@@ -227,16 +241,22 @@ private struct ServerForm: View {
                     if server.port == old.defaultPort { server.port = new.defaultPort }
                 }
                 TextField("Port", value: $server.port, format: .number.grouping(.never))
+                if !(1...65535).contains(server.port) {
+                    Text("Port must be between 1 and 65535").font(.caption).foregroundStyle(.red)
+                }
                 HStack {
                     Button("Test Connection") {
-                        test = "Testing…"
+                        testing = true
                         Task {
                             let p = await probeServer(host: server.host, port: server.port)
                             test = p.portOpen ? "Port open\(p.latencyMs.map { " (\($0) ms)" } ?? "")"
                                 : p.hostReachable ? "Host reachable, port closed" : "Server not reachable"
+                            testing = false
                         }
                     }
-                    if let test { Text(test).foregroundStyle(.secondary) }
+                    .disabled(testing || server.host.trimmingCharacters(in: .whitespaces).isEmpty)
+                    if testing { ProgressView().controlSize(.small) }
+                    else if let test { Text(test).foregroundStyle(.secondary) }
                 }
             }
 
@@ -360,6 +380,6 @@ private struct GeneralSettings: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Settings")
+        .navigationTitle("General")
     }
 }

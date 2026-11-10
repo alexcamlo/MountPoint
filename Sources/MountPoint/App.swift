@@ -50,7 +50,8 @@ struct MenuContent: View {
         if model.config.servers.isEmpty { Text("No servers configured") }
         ForEach(model.config.servers) { server in
             let sr = model.serverRuntime(server.id)
-            Menu(server.name.isEmpty ? server.host : server.name) {
+            // Status visible at a glance, without opening each submenu.
+            Menu {
                 Text("\(server.host) — \(sr?.status.label ?? "Unknown")")
                 if let reason = sr?.blockedReason { Text(reason) }
                 Divider()
@@ -65,6 +66,8 @@ struct MenuContent: View {
                         Button("Reveal in Finder") { model.reveal(share) }.disabled(status != .mounted)
                     }
                 }
+            } label: {
+                Label(server.name.isEmpty ? server.host : server.name, systemImage: serverStyle(sr?.status).symbol)
             }
         }
 

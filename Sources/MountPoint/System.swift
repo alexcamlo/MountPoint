@@ -106,7 +106,7 @@ func vpnActive() -> Bool {
 
 // MARK: - Probes
 
-private final class Once: @unchecked Sendable {
+nonisolated private final class Once: @unchecked Sendable {
     private let lock = NSLock()
     private var fired = false
     func fire() -> Bool { lock.lock(); defer { lock.unlock() }; if fired { return false }; fired = true; return true }

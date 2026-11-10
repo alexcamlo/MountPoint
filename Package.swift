@@ -1,4 +1,4 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.2
 import PackageDescription
 
 let package = Package(
@@ -7,8 +7,8 @@ let package = Package(
     targets: [
         // Pure model + rule/status logic, no I/O: the test surface.
         .target(name: "MountPointCore"),
-        .executableTarget(name: "MountPoint", dependencies: ["MountPointCore"]),
+        .executableTarget(name: "MountPoint", dependencies: ["MountPointCore"],
+                          swiftSettings: [.defaultIsolation(MainActor.self)]),
         .testTarget(name: "MountPointCoreTests", dependencies: ["MountPointCore"]),
-    ],
-    swiftLanguageModes: [.v5]
+    ]
 )

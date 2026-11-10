@@ -7,7 +7,6 @@ import UniformTypeIdentifiers
 
 /// The control loop (port of orchestrator.ts + config-commits.ts + logger-store.ts):
 /// probe → evaluate rules → auto-mount, with per-share exponential backoff.
-@MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var config: AppConfig
     @Published private(set) var runtime = AppRuntime()
@@ -74,7 +73,9 @@ final class AppModel: ObservableObject {
             for s in cfg.servers {
                 group.addTask { (s.id, await probeServer(host: s.host, port: s.port)) }
             }
-            return await group.reduce(into: [String: ProbeResult]()) { $0[$1.0] = $1.1 }
+            var out: [String: ProbeResult] = [:]
+            for await (id, probe) in group { out[id] = probe }
+            return out
         }
         if probes.values.contains(where: \.localNetworkDenied), !warnedLocalNetwork {
             warnedLocalNetwork = true
