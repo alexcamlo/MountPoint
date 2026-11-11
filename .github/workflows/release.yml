@@ -15,10 +15,8 @@ jobs:
       - run: swift test
       # No signing identity on the runner, so the app is ad-hoc signed (not notarized).
       - run: ./build-app.sh
-      # Drag-to-install DMG: the app next to an /Applications shortcut.
-      - run: |
-          mkdir dmg && cp -R "build/Mount Point.app" dmg/ && ln -s /Applications dmg/Applications
-          hdiutil create -volname "Mount Point" -srcfolder dmg -format UDZO MountPoint.dmg
+      # Drag-to-install DMG with a custom background (see dmg/).
+      - run: pipx run dmgbuild -s dmg/settings.py -D app="build/Mount Point.app" "Mount Point" MountPoint.dmg
       - run: gh release create "$GITHUB_REF_NAME" MountPoint.dmg --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
