@@ -1,6 +1,6 @@
-<p align="center"><img src="icon.png" width="128" alt="Mount Point icon"></p>
+<img src="icon.png" width="128" alt="Mount Point icon">
 
-# Mount Point (native)
+# Mount Point
 
 Menu-bar app that keeps network shares mounted. Native Swift/SwiftUI, single 2.4 MB app, no third-party
 packages: only macOS frameworks (NetFS, CoreWLAN, Network, Security, ServiceManagement).
