@@ -11,12 +11,14 @@ jobs:
   release:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - run: swift test
       # No signing identity on the runner, so the app is ad-hoc signed (not notarized).
       - run: ./build-app.sh
       # Drag-to-install DMG with a custom background (see dmg/).
-      - run: pipx run dmgbuild -s dmg/settings.py -D app="build/Mount Point.app" "Mount Point" MountPoint.dmg
+      - run: pipx run dmgbuild==1.6.7 -s dmg/settings.py -D app="build/Mount Point.app" "Mount Point" MountPoint.dmg
       - run: gh release create "$GITHUB_REF_NAME" MountPoint.dmg --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

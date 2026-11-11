@@ -279,6 +279,11 @@ private struct ServerForm: View {
                 if !(1...65535).contains(server.port) {
                     Text("Port must be between 1 and 65535").font(.caption).foregroundStyle(.red)
                 }
+                if server.proto == .webdav && server.port == 80 {
+                    Label("Port 80 uses unencrypted HTTP. Your password is sent in clear text.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 HStack {
                     Button("Test Connection") {
                         testing = true
