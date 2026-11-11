@@ -73,6 +73,20 @@ private func facts(_ edit: (inout ShareFacts) -> Void = { _ in }) -> ShareFacts 
     #expect(findMountPoint([MountedVolume(host: "", share: "My Docs", mountPoint: "/x")], server, share) == nil)
 }
 
+@Test func hostMatchStopsAtLabelBoundary() {
+    let share = Share(serverId: "x", sharePath: "media")
+    func mp(mounted: String, configured: String) -> String? {
+        MountTable([MountedVolume(host: mounted, share: "media", mountPoint: "/m")])
+            .mountPoint(for: Server(host: configured), share: share)
+    }
+    #expect(mp(mounted: "nas", configured: "nas2.local") == nil)
+    #expect(mp(mounted: "n", configured: "nas.local") == nil)
+    #expect(mp(mounted: "nas2.local", configured: "nas") == nil)
+    #expect(mp(mounted: "nas", configured: "nas.local") == "/m")
+    #expect(mp(mounted: "nas.local", configured: "nas") == "/m")
+    #expect(mp(mounted: "NAS", configured: "nas.Local") == "/m")
+}
+
 @Test func decodesPartialConfig() throws {
     let json = """
     {"version":1,"servers":[{"id":"a","name":"NAS","host":"nas.local","protocol":"smb","port":445,

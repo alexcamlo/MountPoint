@@ -182,10 +182,14 @@ func listNetworkMounts() -> [MountedVolume] {
     }
 }
 
+extension MountTable {
+    static func current() -> MountTable { MountTable(listNetworkMounts()) }
+}
+
 struct MountOutcome { var ok: Bool; var mountPoint: String?; var error: String? }
 
 func mount(_ server: Server, _ share: Share) async -> MountOutcome {
-    if let mp = findMountPoint(listNetworkMounts(), server, share) { return .init(ok: true, mountPoint: mp) }
+    if let mp = MountTable.current().mountPoint(for: server, share: share) { return .init(ok: true, mountPoint: mp) }
     guard let url = mountURL(server, share) else { return .init(ok: false, error: "Invalid server address") }
 
     var user: String?
@@ -211,7 +215,7 @@ func mount(_ server: Server, _ share: Share) async -> MountOutcome {
     }.value
 
     // Re-check either way: NetFS can report EEXIST etc. for a mount that's actually there.
-    if let mp = findMountPoint(listNetworkMounts(), server, share) { return .init(ok: true, mountPoint: mp) }
+    if let mp = MountTable.current().mountPoint(for: server, share: share) { return .init(ok: true, mountPoint: mp) }
     if code == 0 { return .init(ok: false, error: "Mount completed but the volume was not found.") }
     return .init(ok: false, error: mountError(code))
 }

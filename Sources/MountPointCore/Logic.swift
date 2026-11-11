@@ -170,15 +170,28 @@ public func parseNetworkMount(source: String, fsType: String, mountPoint: String
                          share: path.removingPercentEncoding ?? path, mountPoint: mountPoint)
 }
 
-/// Mount point of `share` if it is in `mounts`. Lenient host match (nas vs nas.local).
+/// A snapshot of the mounted network volumes.
+public struct MountTable: Equatable, Sendable {
+    public var volumes: [MountedVolume]
+    public init(_ volumes: [MountedVolume]) { self.volumes = volumes }
+
+    /// Mount point of `share` if mounted. Lenient host match: short name vs FQDN
+    /// (nas vs nas.local, either direction), but only at a label boundary.
+    public func mountPoint(for server: Server, share: Share) -> String? {
+        func norm(_ s: String) -> String { s.trimmingCharacters(in: .whitespaces).lowercased() }
+        let wantHost = norm(server.host)
+        let wantFull = norm(share.sharePath.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+        let wantShare = wantFull.split(separator: "/").last.map(String.init) ?? wantFull
+        return volumes.first { m in
+            let h = norm(m.host), s = norm(m.share)
+            let hostMatch = !h.isEmpty && !wantHost.isEmpty
+                && (h == wantHost || h.hasPrefix(wantHost + ".") || wantHost.hasPrefix(h + "."))
+            return hostMatch && (s == wantShare || s == wantFull)
+        }?.mountPoint
+    }
+}
+
+/// Compatibility shim for `MountTable.mountPoint(for:share:)`.
 public func findMountPoint(_ mounts: [MountedVolume], _ server: Server, _ share: Share) -> String? {
-    func norm(_ s: String) -> String { s.trimmingCharacters(in: .whitespaces).lowercased() }
-    let wantHost = norm(server.host)
-    let wantFull = norm(share.sharePath.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
-    let wantShare = wantFull.split(separator: "/").last.map(String.init) ?? wantFull
-    return mounts.first { m in
-        let h = norm(m.host), s = norm(m.share)
-        let hostMatch = !h.isEmpty && (h == wantHost || h.hasPrefix(wantHost + ".") || wantHost.hasPrefix(h))
-        return hostMatch && (s == wantShare || s == wantFull)
-    }?.mountPoint
+    MountTable(mounts).mountPoint(for: server, share: share)
 }

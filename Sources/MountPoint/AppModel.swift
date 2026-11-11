@@ -179,7 +179,7 @@ final class AppModel: ObservableObject {
 
     func manualUnmount(_ share: Share) {
         guard let server = server(share.serverId) else { return }
-        guard let mp = findMountPoint(listNetworkMounts(), server, share) else { refresh(); return }
+        guard let mp = MountTable.current().mountPoint(for: server, share: share) else { refresh(); return }
         // Don't auto-remount right after a manual unmount.
         backoff[share.id, default: Backoff()].nextAttemptAt = Date() + Self.backoffBase
         Task {
@@ -192,7 +192,7 @@ final class AppModel: ObservableObject {
 
     func reveal(_ share: Share) {
         guard let server = server(share.serverId),
-              let mp = findMountPoint(listNetworkMounts(), server, share) else { return }
+              let mp = MountTable.current().mountPoint(for: server, share: share) else { return }
         NSWorkspace.shared.open(URL(fileURLWithPath: mp))
     }
 
