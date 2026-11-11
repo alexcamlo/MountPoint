@@ -35,7 +35,11 @@ enum Storage {
 
 // MARK: - Keychain (generic password per server id)
 
-enum Keychain {
+extension ServerCredentials {
+    static let live = ServerCredentials(store: Keychain())
+}
+
+nonisolated struct Keychain: SecretStore {
     private static let service = "Mount Point"
 
     private static func query(_ serverId: String) -> [String: Any] {
@@ -44,9 +48,9 @@ enum Keychain {
          kSecAttrAccount as String: serverId]
     }
 
-    static func set(_ password: String, for serverId: String) throws {
-        SecItemDelete(query(serverId) as CFDictionary)
-        var q = query(serverId)
+    func set(_ password: String, for serverId: String) throws {
+        SecItemDelete(Self.query(serverId) as CFDictionary)
+        var q = Self.query(serverId)
         q[kSecValueData as String] = Data(password.utf8)
         let status = SecItemAdd(q as CFDictionary, nil)
         guard status == errSecSuccess else {
@@ -55,8 +59,8 @@ enum Keychain {
         }
     }
 
-    static func get(_ serverId: String) -> String? {
-        var q = query(serverId)
+    func get(_ serverId: String) -> String? {
+        var q = Self.query(serverId)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: CFTypeRef?
@@ -64,8 +68,8 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func delete(_ serverId: String) {
-        SecItemDelete(query(serverId) as CFDictionary)
+    func delete(_ serverId: String) {
+        SecItemDelete(Self.query(serverId) as CFDictionary)
     }
 }
 
@@ -201,7 +205,7 @@ func mount(_ server: Server, _ share: Share) async -> MountOutcome {
         openOptions[kNetFSUseGuestKey] = true
     } else {
         user = share.usernameOverride ?? server.username
-        if server.hasStoredPassword == true { password = Keychain.get(server.id) }
+        password = ServerCredentials.live.password(for: server)
     }
     let mountOptions = NSMutableDictionary()
     if share.readOnly { mountOptions[kNetFSMountFlagsKey] = MNT_RDONLY }

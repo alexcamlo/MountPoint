@@ -326,8 +326,7 @@ private struct ServerForm: View {
                 Button("Save") {
                     server.rules.wifiSSID.ssids = ssids.split(separator: ",")
                         .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-                    let pw: String? = removePassword ? "" : (password.isEmpty ? nil : password)
-                    model.saveServer(server, password: server.authMode == .guest ? (server.hasStoredPassword == true ? "" : nil) : pw)
+                    model.saveServer(server, password: removePassword ? .clear : password.isEmpty ? .keep : .replace(password))
                     onSave(server)
                     dismiss()
                 }

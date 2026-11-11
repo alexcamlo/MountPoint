@@ -178,35 +178,18 @@ final class AppModel: ObservableObject {
         return true
     }
 
-    /// `password`: nil = unchanged, "" = remove, otherwise store in Keychain.
-    func saveServer(_ input: Server, password: String?) {
+    func saveServer(_ input: Server, password: PasswordIntent) {
         var server = input
         server.name = server.name.trimmingCharacters(in: .whitespaces)
         server.host = server.host.trimmingCharacters(in: .whitespaces)
         server.username = server.username?.trimmingCharacters(in: .whitespaces).nilIfEmpty
         if server.port <= 0 { server.port = server.proto.defaultPort }
-        if let password { server.hasStoredPassword = !password.isEmpty }
-        // Config first, credentials after: a failed save never leaves an orphaned secret.
-        guard commit({ upsert(&$0.servers, server) }) else { return }
-        guard let password else { return }
-        if password.isEmpty {
-            Keychain.delete(server.id)
-        } else {
-            do { try Keychain.set(password, for: server.id) } catch {
-                addLog(.error, error.localizedDescription, server.id)
-                commit { cfg in
-                    if let i = cfg.servers.firstIndex(where: { $0.id == server.id }) { cfg.servers[i].hasStoredPassword = false }
-                }
-            }
-        }
+        do { try ServerCredentials.live.save(server, password) { commit($0) } }
+        catch { addLog(.error, error.localizedDescription, server.id) }
     }
 
     func deleteServer(_ id: String) {
-        guard commit({ cfg in
-            cfg.servers.removeAll { $0.id == id }
-            cfg.shares.removeAll { $0.serverId == id }
-        }) else { return }
-        Keychain.delete(id)
+        ServerCredentials.live.delete(id) { commit($0) }
     }
 
     func saveShare(_ input: Share) {
@@ -237,9 +220,7 @@ final class AppModel: ObservableObject {
         panel.allowedContentTypes = [.json]
         NSApp.activate()
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        var cfg = config
-        for i in cfg.servers.indices { cfg.servers[i].hasStoredPassword = false } // secrets never leave the Keychain
-        do { try Storage.write(cfg, to: url); addLog(.info, "Exported configuration to \(url.path)") }
+        do { try Storage.write(ServerCredentials.scrubbed(config), to: url); addLog(.info, "Exported configuration to \(url.path)") }
         catch { addLog(.error, "Export failed: \(error.localizedDescription)") }
     }
 
@@ -253,12 +234,7 @@ final class AppModel: ObservableObject {
             addLog(.error, "Import failed: \(url.lastPathComponent) is not a valid Mount Point configuration")
             return
         }
-        for s in config.servers { Keychain.delete(s.id) }
-        commit { cfg in
-            cfg.servers = imported.servers.map { var s = $0; s.hasStoredPassword = false; return s }
-            cfg.shares = imported.shares
-            cfg.settings = imported.settings
-        }
+        ServerCredentials.live.importConfig(imported, replacing: config) { commit($0) }
         addLog(.info, "Imported \(imported.servers.count) server(s) and \(imported.shares.count) share(s)")
     }
 
