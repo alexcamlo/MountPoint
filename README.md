@@ -39,6 +39,6 @@ Requires macOS 15+ and Xcode (or the Command Line Tools with Swift 6) to build.
 
 ## Releases
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds and attaches `MountPoint.zip` to a
-GitHub Release. That build is ad-hoc signed and not notarized: after unzipping, open it via System Settings →
+Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds and attaches `MountPoint.dmg` to a
+GitHub Release. That build is ad-hoc signed and not notarized: after dragging it to Applications, open it via System Settings →
 Privacy & Security → "Open Anyway" (or `xattr -d com.apple.quarantine "Mount Point.app"`).

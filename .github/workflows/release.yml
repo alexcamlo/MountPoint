@@ -15,7 +15,10 @@ jobs:
       - run: swift test
       # No signing identity on the runner, so the app is ad-hoc signed (not notarized).
       - run: ./build-app.sh
-      - run: ditto -c -k --keepParent "build/Mount Point.app" MountPoint.zip
-      - run: gh release create "$GITHUB_REF_NAME" MountPoint.zip --generate-notes
+      # Drag-to-install DMG: the app next to an /Applications shortcut.
+      - run: |
+          mkdir dmg && cp -R "build/Mount Point.app" dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname "Mount Point" -srcfolder dmg -format UDZO MountPoint.dmg
+      - run: gh release create "$GITHUB_REF_NAME" MountPoint.dmg --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}
