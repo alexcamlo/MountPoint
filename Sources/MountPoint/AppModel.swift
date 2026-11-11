@@ -12,12 +12,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var runtime = AppRuntime()
     @Published private(set) var logs: [LogEntry] // oldest first, like the JSON file
 
-    private struct Backoff { var failures = 0; var nextAttemptAt = Date.distantPast; var lastError: String? }
-    private static let backoffBase: TimeInterval = 15
-    private static let backoffMax: TimeInterval = 15 * 60
     private static let maxLogs = 500
 
-    private var backoff: [String: Backoff] = [:]
+    private var backoff = BackoffLedger()
     private var inFlight: Set<String> = []
     private var evaluating = false
     private var rerunRequested = false
@@ -37,7 +34,7 @@ final class AppModel: ObservableObject {
                                                           queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.addLog(.info, "System woke — re-evaluating mounts")
-                self?.backoff.removeAll()
+                self?.backoff.resetAll()
                 self?.refresh()
             }
         }
@@ -83,54 +80,13 @@ final class AppModel: ObservableObject {
         }
         let mounts = listNetworkMounts()
         let paused = config.settings.paused // may have changed while probing
-        var queue: [(Server, Share)] = []
-
-        let servers: [ServerRuntime] = cfg.servers.map { server in
-            let probe = probes[server.id] ?? ProbeResult(hostReachable: false, portOpen: false)
-            let eval = evaluateRules(server, net: net, probe: probe)
-            let shareRuntimes: [ShareRuntime] = cfg.shares.filter { $0.serverId == server.id }.map { share in
-                let b = backoff[share.id] ?? Backoff()
-                var f = ShareFacts()
-                f.mountPoint = findMountPoint(mounts, server, share)
-                f.mounting = inFlight.contains(share.id)
-                f.paused = paused
-                f.blocked = eval.blocked
-                f.blockedReason = eval.reason
-                f.reachable = probe.hostReachable
-                f.portOpen = probe.portOpen
-                f.failures = b.failures
-                f.lastError = b.lastError
-                f.nextAttemptAt = b.failures > 0 ? b.nextAttemptAt : nil
-                var sr = deriveShareStatus(share, f)
-
-                let eligible = !paused && share.behavior == .auto && !eval.blocked && probe.portOpen
-                    && f.mountPoint == nil && !f.mounting && Date() >= b.nextAttemptAt
-                if eligible {
-                    queue.append((server, share))
-                    sr.status = .pending
-                    sr.reason = "Mounting…"
-                }
-                return sr
-            }
-            return ServerRuntime(
-                serverId: server.id,
-                status: deriveServerStatus(reachable: probe.hostReachable, portOpen: probe.portOpen,
-                                           blocked: eval.blocked, shares: shareRuntimes),
-                hostReachable: probe.hostReachable, portOpen: probe.portOpen, latencyMs: probe.latencyMs,
-                rules: eval.results, blockedReason: eval.blocked ? eval.reason : nil, shares: shareRuntimes)
-        }
-
-        var rt = AppRuntime()
-        rt.overall = deriveOverallStatus(servers, paused: paused)
-        rt.paused = paused
-        rt.network = net
-        rt.servers = servers
-        runtime = rt
-
-        if !queue.isEmpty { Task { await processMountQueue(queue) } }
+        let pass = evaluateAutoMount(config: cfg, network: net, probes: probes, mounts: mounts,
+                                     backoff: backoff, inFlight: inFlight, paused: paused, now: Date())
+        runtime = pass.runtime
+        if !pass.mountQueue.isEmpty { Task { await processMountQueue(pass.mountQueue) } }
     }
 
-    private func processMountQueue(_ queue: [(Server, Share)]) async {
+    private func processMountQueue(_ queue: [(server: Server, share: Share)]) async {
         for (server, share) in queue where !inFlight.contains(share.id) {
             addLog(.info, "Mounting \"\(share.displayName)\" on \(server.name)…", server.id, share.id)
             _ = await performMount(server, share, manual: false)
@@ -143,14 +99,10 @@ final class AppModel: ObservableObject {
         defer { inFlight.remove(share.id) }
         let result = await mount(server, share)
         if result.ok {
-            backoff[share.id] = Backoff()
+            backoff.recordSuccess(share.id)
             addLog(.info, "Mounted \"\(share.displayName)\" at \(result.mountPoint ?? "?")", server.id, share.id)
         } else {
-            var b = backoff[share.id] ?? Backoff()
-            b.failures += 1
-            b.lastError = result.error
-            b.nextAttemptAt = Date() + min(Self.backoffBase * pow(2, Double(b.failures - 1)), Self.backoffMax)
-            backoff[share.id] = b
+            backoff.recordFailure(share.id, error: result.error, now: Date())
             addLog(.error, "\(manual ? "Manual mount" : "Mount") of \"\(share.displayName)\" failed: \(result.error ?? "unknown error")",
                    server.id, share.id)
         }
@@ -180,8 +132,7 @@ final class AppModel: ObservableObject {
     func manualUnmount(_ share: Share) {
         guard let server = server(share.serverId) else { return }
         guard let mp = MountTable.current().mountPoint(for: server, share: share) else { refresh(); return }
-        // Don't auto-remount right after a manual unmount.
-        backoff[share.id, default: Backoff()].nextAttemptAt = Date() + Self.backoffBase
+        backoff.suppress(share.id, now: Date()) // don't auto-remount right after a manual unmount
         Task {
             let result = await unmount(mp)
             if result.ok { addLog(.info, "Unmounted \"\(share.displayName)\"", server.id, share.id) }
