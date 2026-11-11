@@ -1,15 +1,17 @@
+<p align="center"><img src="icon.png" width="128" alt="Mount Point icon"></p>
+
 # Mount Point (native)
 
 Menu-bar app that keeps network shares mounted. Native Swift/SwiftUI, single 2.4 MB app, no third-party
 packages: only macOS frameworks (NetFS, CoreWLAN, Network, Security, ServiceManagement).
 
-```sh
-./build-app.sh            # → build/Mount Point.app
-./build-app.sh --install  # also copies it to /Applications
-swift test                # rule + status logic tests (MountPointCore)
-```
+## Install
 
-Requires macOS 15+ and Xcode (or the Command Line Tools with Swift 6) to build.
+Download `MountPoint.dmg` from the [latest release](https://github.com/alexcamlo/MountPoint/releases/latest)
+and drag **Mount Point** to Applications. Requires macOS 15+.
+
+The release build is ad-hoc signed and not notarized, so the first launch is blocked: open it via System Settings →
+Privacy & Security → "Open Anyway" (or `xattr -d com.apple.quarantine "/Applications/Mount Point.app"`).
 
 ## Layout
 
@@ -37,8 +39,17 @@ Requires macOS 15+ and Xcode (or the Command Line Tools with Swift 6) to build.
   Accounts; override with `SIGN_IDENTITY`). Its Team ID keeps permissions across rebuilds. Without one it signs
   ad-hoc, and macOS asks for Local Network again after every rebuild.
 
+## Building from source
+
+```sh
+./build-app.sh            # → build/Mount Point.app
+./build-app.sh --install  # also copies it to /Applications
+swift test                # rule + status logic tests (MountPointCore)
+```
+
+Requires Xcode (or the Command Line Tools with Swift 6).
+
 ## Releases
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which tests, builds and attaches `MountPoint.dmg` to a
-GitHub Release. That build is ad-hoc signed and not notarized: after dragging it to Applications, open it via System Settings →
-Privacy & Security → "Open Anyway" (or `xattr -d com.apple.quarantine "Mount Point.app"`).
+GitHub Release.
